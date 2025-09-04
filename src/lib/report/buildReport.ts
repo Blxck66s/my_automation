@@ -6,6 +6,7 @@ import { autoFitColumns } from "./autofit";
 import { cloneRowStyle } from "./rowStyle";
 import { loadTemplateBuffer } from "./template";
 import { ensureUniqueSheetName, importTemplateSheet } from "./workbookTemplate";
+import type { BuildStyleWarnings } from "./styleWarnings";
 
 /**
  * Options controlling how the Excel report is built.
@@ -17,7 +18,10 @@ export interface BuildReportOptions {
   outputFilename?: string;
   baseWorkbookFile?: File;
   targetSheetName?: string;
-  templateFilename?: string; // (kept for future use)
+  templateFilename?: string;
+  styleWarnings?: BuildStyleWarnings;
+  numberPrefix?: string;
+  headlineFromPrn?: string; // NEW: prefer PRN B1 headline over workbook template
 }
 
 /**
@@ -36,6 +40,9 @@ export async function buildReportClient(
     outputFilename = "report.xlsx",
     baseWorkbookFile,
     targetSheetName = "Report",
+    styleWarnings,
+    numberPrefix,
+    headlineFromPrn, // NEW
   } = opts;
 
   const wb = new ExcelJS.Workbook();
@@ -61,6 +68,31 @@ export async function buildReportClient(
     ws.spliceRows(startRow + 1, 0, ...Array(rows.length - 1).fill([]));
   }
 
+  // Headline logic: prefer provided PRN headline, fallback to existing B1
+  const toPlainText = (v: ExcelJS.CellValue): string => {
+    if (v == null) return "";
+    if (typeof v === "object") {
+      if ("richText" in v && Array.isArray(v.richText)) {
+        return v.richText.map((r) => r.text).join("");
+      }
+      if ("text" in v) return String(v.text);
+    }
+    return String(v);
+  };
+  const baseHeadline = (
+    headlineFromPrn ?? toPlainText(ws.getCell("B1").value)
+  ).trim();
+  if (headlineFromPrn) {
+    // Overwrite B1 so workbook reflects PRN headline source
+    ws.getCell("B1").value = baseHeadline;
+  }
+  if (baseHeadline && numberPrefix) {
+    ws.getCell("A1").value = `${numberPrefix}. ${baseHeadline}`;
+  }
+
+  // Simple sequential numbering (removed B4-based logic)
+  const startingSeq = 1;
+
   // Populate rows
   rows.forEach((r, i) => {
     const rowIndex = startRow + i;
@@ -68,7 +100,7 @@ export async function buildReportClient(
     const row = ws.getRow(rowIndex);
     const cleanedUrl = extractDisplayUrl(r.url);
 
-    row.getCell(1).value = i + 1;
+    row.getCell(1).value = startingSeq + i;
     row.getCell(2).value = r.published;
     row.getCell(3).value = r.outlet;
 
@@ -92,6 +124,26 @@ export async function buildReportClient(
     row.getCell(6).numFmt ||= "$#,##0";
     row.commit();
   });
+
+  // Apply style warnings (after data rows before totals)
+  if (styleWarnings) {
+    const applyRedFont = (rowIndex: number, col?: number) => {
+      const excelRow = ws.getRow(startRow + rowIndex);
+      if (col) {
+        const cell = excelRow.getCell(col);
+        cell.font = { ...(cell.font ?? {}), color: { argb: "FFFF0000" } };
+      } else {
+        for (let c = 1; c <= 7; c++) {
+          const cell = excelRow.getCell(c);
+          cell.font = { ...(cell.font ?? {}), color: { argb: "FFFF0000" } };
+        }
+      }
+      excelRow.commit();
+    };
+
+    styleWarnings.redCells?.forEach(({ row, col }) => applyRedFont(row, col));
+    styleWarnings.redRows?.forEach((r) => applyRedFont(r));
+  }
 
   // Totals
   if (writeTotals) {

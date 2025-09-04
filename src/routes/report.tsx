@@ -52,10 +52,12 @@ function RouteComponent() {
         />
         <FileDropZone
           id="supplemental-xlsx"
-          label="3. PRNewswire Data File (.xlsx)"
+          label="3. PRNewswire Data File (.xls/.xlsx)"
           description="Optional (may include duplicates)."
           accept={[
+            ".xls",
             ".xlsx",
+            "application/vnd.ms-excel",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           ]}
           value={prNewswireDataFile}
@@ -66,6 +68,7 @@ function RouteComponent() {
         <ReportGenerationForm
           reportFile={reportFile}
           cisionOneDataFile={cisionOneDataFile}
+          prNewswireDataFile={prNewswireDataFile}
         />
       </section>
     </div>

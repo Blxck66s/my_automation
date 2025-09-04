@@ -3,10 +3,14 @@ import type { SelectedFile } from "../../lib/files/types";
 import { extractCisionOneFile } from "../../lib/report/cisionOneExtractor";
 import type { ReportRow } from "../../lib/report/types";
 import { buildReportClient } from "../../lib/report/buildReport";
+import { extractPrnFile } from "../../lib/report/prNewswire/extractor";
+import { mergeCisionAndPrn } from "../../lib/report/mergeReports";
+import type { BuildStyleWarnings } from "../../lib/report/styleWarnings";
 
 interface ReportGenerationFormProps {
   reportFile?: SelectedFile;
   cisionOneDataFile?: SelectedFile;
+  prNewswireDataFile?: SelectedFile; // NEW
 }
 
 /**
@@ -21,10 +25,15 @@ function deriveSuggestedSheetName(fileName: string): string {
 export function ReportGenerationForm({
   reportFile,
   cisionOneDataFile,
+  prNewswireDataFile,
 }: ReportGenerationFormProps) {
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [issues, setIssues] = useState<{ row: number; message: string }[]>([]);
   const [loading, setLoading] = useState(false);
+  const [styleWarnings, setStyleWarnings] = useState<
+    BuildStyleWarnings | undefined
+  >(undefined);
+  const [prnHeadline, setPrnHeadline] = useState<string | undefined>(); // NEW
 
   // Form state
   const [ignoreExistingWorkbook, setIgnoreExistingWorkbook] = useState(false);
@@ -34,10 +43,11 @@ export function ReportGenerationForm({
   // Track user override for output file name
   const outputNameChangedRef = useMemo(() => ({ current: false }), []);
 
-  // Parse CSV
+  // Unified parsing + merge
   useEffect(() => {
     let cancelled = false;
     async function run() {
+      setStyleWarnings(undefined);
       if (!cisionOneDataFile) {
         setRows([]);
         setIssues([]);
@@ -45,26 +55,53 @@ export function ReportGenerationForm({
       }
       setLoading(true);
       try {
-        const res = await extractCisionOneFile(cisionOneDataFile.file);
+        const cisionRes = await extractCisionOneFile(cisionOneDataFile.file);
         if (cancelled) return;
-        setRows(res.rows);
+
+        let mergedRows = cisionRes.rows.slice();
+        const mergedIssues = cisionRes.issues
+          .slice()
+          .sort((a, b) => a.row - b.row)
+          .map((i) => ({ row: i.row, message: i.message }));
+        let mergedStyles: BuildStyleWarnings | undefined;
+
+        if (prNewswireDataFile) {
+          try {
+            const prnRes = await extractPrnFile(prNewswireDataFile.file);
+            if (cancelled) return;
+            const { rows: prnRows, invalidDateUrls, headlineB1 } = prnRes; // NEW
+            setPrnHeadline(headlineB1); // NEW
+            const { rows: finalRows, styleWarnings: sw } = mergeCisionAndPrn(
+              cisionRes.rows,
+              prnRows,
+              invalidDateUrls
+            );
+            mergedRows = finalRows;
+            mergedStyles = sw;
+          } catch (e) {
+            mergedIssues.push({
+              row: 0,
+              message: `PRNewswire parse failed: ${(e as Error).message}`,
+            });
+          }
+        } else {
+          setPrnHeadline(undefined); // reset if PRN removed
+        }
+
+        setRows(mergedRows);
+        setStyleWarnings(mergedStyles);
         const suggestion = deriveSuggestedSheetName(cisionOneDataFile.name);
         setTargetSheetName((prev) => (prev ? prev : suggestion));
-        setIssues(
-          res.issues
-            .slice()
-            .sort((a, b) => a.row - b.row)
-            .map((i) => ({ row: i.row, message: i.message }))
-        );
+        setIssues(mergedIssues);
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
-    run();
+    void run();
     return () => {
       cancelled = true;
     };
-  }, [cisionOneDataFile]);
+  }, [cisionOneDataFile, prNewswireDataFile]);
 
   // Default output file name from existing report (if provided & not overridden)
   useEffect(() => {
@@ -79,11 +116,18 @@ export function ReportGenerationForm({
 
   const handleGenerate = async () => {
     if (!canGenerate) return;
+    // derive numeric prefix from sheet suggestion (digits only)
+    const numPrefixMatch = cisionOneDataFile?.name.match(/(\d{1,4})/);
+    const numberPrefix = numPrefixMatch ? numPrefixMatch[1] : undefined;
+
     await buildReportClient(rows, {
       baseWorkbookFile:
         ignoreExistingWorkbook || !reportFile ? undefined : reportFile.file,
       targetSheetName: targetSheetName.trim(),
       outputFilename: outputFileName.trim() + ".xlsx",
+      styleWarnings,
+      numberPrefix,
+      headlineFromPrn: prnHeadline, // NEW
     });
   };
   return (

@@ -226,7 +226,6 @@ export function extractCisionOneCsv(csvText: string): ExtractResult {
     const missing = required.filter(
       (k) => draft[k] === undefined || draft[k] === ""
     );
-    console.log(missing);
     if (missing.length > 0) {
       issues.push({
         row: i + 1,
@@ -234,7 +233,6 @@ export function extractCisionOneCsv(csvText: string): ExtractResult {
       });
       continue;
     }
-    console.log(draft);
 
     rows.push(draft as ReportRow);
   }
