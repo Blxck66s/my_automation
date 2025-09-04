@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import type { SelectedFile } from "../lib/files/types";
 import { FileDropZone } from "../components/file-upload/FileDropZone";
-import { DownloadReportButton } from "../components/report/DownloadReportButton";
+import { ReportGenerationForm } from "../components/report/ReportGenerationForm";
 
 export const Route = createFileRoute("/report")({
   component: RouteComponent,
@@ -10,14 +10,12 @@ export const Route = createFileRoute("/report")({
 
 function RouteComponent() {
   const [reportFile, setReportFile] = useState<SelectedFile | undefined>();
-  const [primaryDataFile, setPrimaryDataFile] = useState<
+  const [cisionOneDataFile, setCisionOneDataFile] = useState<
     SelectedFile | undefined
   >();
-  const [supplementalFile, setSupplementalFile] = useState<
+  const [prNewswireDataFile, setPrNewswireDataFile] = useState<
     SelectedFile | undefined
   >();
-
-  const ready = !!(reportFile && primaryDataFile);
 
   return (
     <div className="container mx-auto max-w-5xl p-4 space-y-8">
@@ -34,7 +32,7 @@ function RouteComponent() {
         <FileDropZone
           id="existing-report"
           label="1. Existing Report (.xlsx)"
-          description="Baseline Excel workbook to append/enrich."
+          description="Baseline Excel workbook to update."
           accept={[
             ".xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -45,39 +43,30 @@ function RouteComponent() {
         />
         <FileDropZone
           id="primary-csv"
-          label="2. Cision One Data (.csv)"
+          label="2. Cision One Data File (.csv)"
           description="Main CSV dataset to normalize & merge."
           accept={[".csv", "text/csv"]}
           required
-          value={primaryDataFile}
-          onSelect={setPrimaryDataFile}
+          value={cisionOneDataFile}
+          onSelect={setCisionOneDataFile}
         />
         <FileDropZone
           id="supplemental-xlsx"
-          label="3. Supplemental Source (.xlsx)"
-          description="Optional extra workbook (may include duplicates)."
+          label="3. PRNewswire Data File (.xlsx)"
+          description="Optional (may include duplicates)."
           accept={[
             ".xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           ]}
-          value={supplementalFile}
-          onSelect={setSupplementalFile}
+          value={prNewswireDataFile}
+          onSelect={setPrNewswireDataFile}
         />
       </section>
-      <section className="card border bg-base-100">
-        <div className="card-body gap-4">
-          <h2 className="card-title">Next Step (Pending)</h2>
-          <ul className="list-disc pl-5 text-sm opacity-80 space-y-1">
-            <li>Merge + dedupe (including supplemental)</li>
-            <li>Export updated report (.xlsx)</li>
-          </ul>
-          <div>
-            <DownloadReportButton
-              isDisabled={!ready}
-              dataFile={primaryDataFile}
-            />
-          </div>
-        </div>
+      <section className="flex flex-col items-center border-t pt-6">
+        <ReportGenerationForm
+          reportFile={reportFile}
+          cisionOneDataFile={cisionOneDataFile}
+        />
       </section>
     </div>
   );

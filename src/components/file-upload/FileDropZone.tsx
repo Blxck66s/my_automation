@@ -66,7 +66,7 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
   const clear = useCallback(() => onSelect(undefined), [onSelect]);
 
   return (
-    <div className="card card-bordered bg-base-100 shadow-sm flex-1/3">
+    <div className="card bg-base-200  shadow-md flex-1/3">
       <div className="card-body gap-4">
         <h2 className="card-title flex items-center gap-2">
           {label}

@@ -24,27 +24,13 @@ export interface ExtractResult {
  * Configuration for header synonym matching.
  */
 const HEADER_SYNONYMS: Record<keyof ReportRow, string[]> = {
-  published: ["published", "publish date", "date", "publication date"],
-  outlet: ["outlet", "media outlet", "source", "publication", "media"],
-  title: ["title", "headline", "article title", "coverage"],
-  readership: [
-    "readership",
-    "audience",
-    "uvpm",
-    "impressions",
-    "reach",
-    "potential audience",
-  ],
-  adEq: [
-    "adeq",
-    "ad eq",
-    "advertising value",
-    "ad value",
-    "pr value",
-    "advertising value equivalency",
-  ],
-  base: ["base", "country", "region", "market", "geography", "location"],
-  url: ["url", "link", "article url", "source url"],
+  published: ["date"],
+  outlet: ["outlet name", "source"],
+  title: ["headline"],
+  readership: ["potential audience"],
+  adEq: ["advertising value equivalency"],
+  base: ["country", "location"],
+  url: ["url", "link"],
 };
 
 /**
@@ -109,7 +95,7 @@ function norm(h: string): string {
 }
 
 /**
- * Attempt to map CSV header names to ReportRow fields using synonyms.
+ * Map CSV header names to ReportRow fields using synonyms.
  */
 function buildHeaderMap(headers: string[]): {
   map: Record<number, keyof ReportRow | undefined>;
@@ -252,6 +238,8 @@ export function extractCisionOneCsv(csvText: string): ExtractResult {
 
     rows.push(draft as ReportRow);
   }
+
+  rows.reverse();
 
   return {
     rows,
