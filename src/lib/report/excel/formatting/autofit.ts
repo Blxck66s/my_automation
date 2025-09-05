@@ -1,9 +1,5 @@
-import type { Worksheet } from "exceljs";
+import type { Worksheet, CellValue } from "exceljs";
 
-/**
- * Auto-fit widths for given column indexes (1-based).
- * Simple heuristic: longest textual length + padding, clamped.
- */
 export function autoFitColumns(
   ws: Worksheet,
   cols: number[],
@@ -17,11 +13,13 @@ export function autoFitColumns(
     const col = ws.getColumn(colIdx);
     let width = min;
     col.eachCell({ includeEmpty: false }, (cell) => {
-      const v = cell.value;
-      let text: string;
+      const v = cell.value as CellValue;
+      let text = "";
       if (v == null) text = "";
-      else if (typeof v === "object" && "text" in v) text = String(v.text);
-      else text = String(v);
+      else if (typeof v === "object" && "text" in (v as object)) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        text = String((v as any).text ?? "");
+      } else text = String(v);
       width = Math.max(width, text.length + pad);
     });
     col.width = Math.min(Math.max(min, width), max);

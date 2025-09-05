@@ -1,36 +1,19 @@
-import type { ReportRow } from "../types";
-import { extractPublishedFromPrnUrl } from "./date";
-
-export interface PrnExtractIssue {
-  row: number;
-  message: string;
-  field?: keyof ReportRow;
-  rawValue?: string;
-}
+import { HEADER_SYNONYMS, type ExtractIssue, type ReportRow } from "../types";
+import {
+  extractPublishedFromPrnUrl,
+  parseNumber,
+  norm,
+} from "../utils/extractorTools";
 
 export interface PrnExtractResult {
   rows: ReportRow[];
-  issues: PrnExtractIssue[];
+  issues: ExtractIssue[];
   invalidDateUrls: Set<string>;
-  headlineB1?: string; // NEW: original B1 headline text
+  headlineB1?: string;
 }
-
-const HEADER_SYNONYMS: Record<keyof ReportRow, string[]> = {
-  published: ["published", "date"],
-  outlet: ["source", "outlet", "outlet name", "publisher"],
-  title: ["headline", "title"],
-  readership: ["potential audience", "audience", "reach", "impressions"],
-  adEq: ["adeq", "advertising value equivalency", "ad value"],
-  base: ["location", "country", "region", "base"],
-  url: ["url", "link"],
-};
 
 const TEXT_PLACEHOLDER = "Not Available";
 const NUM_PLACEHOLDER = "N/A";
-
-function norm(h: string): string {
-  return h.trim().toLowerCase().replace(/\s+/g, " ");
-}
 
 function buildHeaderIndex(
   headers: string[]
@@ -44,19 +27,10 @@ function buildHeaderIndex(
   return map;
 }
 
-function parseNumber(v: unknown): number | undefined {
-  if (v == null) return undefined;
-  const cleaned = String(v).replace(/[$,]/g, "").trim();
-  if (!cleaned) return undefined;
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : undefined;
-}
-
 export async function extractPrnFile(file: File): Promise<PrnExtractResult> {
-  const issues: PrnExtractIssue[] = [];
+  const issues: ExtractIssue[] = [];
   const invalidDateUrls = new Set<string>();
   const XLSX = await import("xlsx");
-
   const data = new Uint8Array(await file.arrayBuffer());
   let wb;
   try {
@@ -66,48 +40,37 @@ export async function extractPrnFile(file: File): Promise<PrnExtractResult> {
       "Failed to read PRNewswire spreadsheet (ensure .xls/.xlsx is valid)"
     );
   }
-
   const sheetName = wb.SheetNames[0];
-  if (!sheetName) {
+  if (!sheetName)
     return {
       rows: [],
       issues: [{ row: 0, message: "No worksheet found" }],
       invalidDateUrls,
     };
-  }
   const ws = wb.Sheets[sheetName];
-
-  // NEW: capture B1 headline (if any)
   let headlineB1: string | undefined;
   const b1Cell = ws["B1"];
   if (b1Cell && b1Cell.v != null) {
     const v = String(b1Cell.v).trim();
     if (v) headlineB1 = v;
   }
-
   const matrix: unknown[][] = XLSX.utils.sheet_to_json(ws, {
     header: 1,
     blankrows: false,
     defval: "",
   }) as unknown[][];
-
-  if (matrix.length === 0) {
+  if (!matrix.length)
     return {
       rows: [],
       issues: [{ row: 0, message: "Empty sheet" }],
       invalidDateUrls,
     };
-  }
-
-  // B4 start ID (string)
   let startIdValue: string | undefined;
   const b4Cell = ws["B4"];
   if (b4Cell && b4Cell.v != null) {
     const v = String(b4Cell.v).trim();
     if (v) startIdValue = v;
   }
-
-  // Find row index whose first col matches startIdValue
   let startDataIndex = 0;
   if (startIdValue) {
     for (let i = 0; i < matrix.length; i++) {
@@ -118,21 +81,15 @@ export async function extractPrnFile(file: File): Promise<PrnExtractResult> {
       }
     }
   }
-
-  // Determine header row (row immediately above start, fallback to 0)
   const headerRowIndex = startDataIndex > 0 ? startDataIndex - 1 : 0;
   if (headerRowIndex === startDataIndex) {
-    // If start is row 0, treat first row as header; advance data start to 1
     startDataIndex = Math.min(startDataIndex + 1, matrix.length);
   }
-
   const rawHeaderCells = (matrix[headerRowIndex] as string[]) ?? [];
   const headers: string[] = rawHeaderCells.map((h, i) => {
     const trimmed = String(h ?? "").trim();
     return trimmed || `__EMPTY_${i}`;
   });
-
-  // Determine end (exclusive) by first empty first-column cell after startDataIndex
   let endDataIndexExclusive = matrix.length;
   for (let i = startDataIndex; i < matrix.length; i++) {
     const first = String(matrix[i][0] ?? "").trim();
@@ -141,10 +98,7 @@ export async function extractPrnFile(file: File): Promise<PrnExtractResult> {
       break;
     }
   }
-
   const headerFieldMap = buildHeaderIndex(headers);
-
-  // Build data objects within [startDataIndex, endDataIndexExclusive)
   const dataObjects: Record<string, unknown>[] = [];
   for (let r = startDataIndex; r < endDataIndexExclusive; r++) {
     const rowArr = matrix[r];
@@ -155,51 +109,40 @@ export async function extractPrnFile(file: File): Promise<PrnExtractResult> {
     });
     dataObjects.push(obj);
   }
-
   const rows: ReportRow[] = [];
-
   const findKeyForField = (field: keyof ReportRow): string | undefined =>
     headers.find((_, idx) => headerFieldMap[idx] === field);
-
   const kPublished = findKeyForField("published");
   const kOutlet = findKeyForField("outlet");
   const kTitle = findKeyForField("title");
   const kReadership = findKeyForField("readership");
   const kBase = findKeyForField("base");
   const kUrl = findKeyForField("url");
-
   dataObjects.forEach((record) => {
     const url = kUrl ? String(record[kUrl] ?? "").trim() : "";
     const readershipRaw = kReadership ? record[kReadership] : undefined;
     let readership = parseNumber(readershipRaw);
-
     if (readership === undefined) {
       const numericCandidates: number[] = [];
       Object.values(record).forEach((v) => {
         const n = parseNumber(v);
         if (n !== undefined && n > 0) numericCandidates.push(n);
       });
-      if (numericCandidates.length) {
+      if (numericCandidates.length)
         readership = numericCandidates.sort((a, b) => b - a)[0];
-      }
     }
-
     const adEq =
       readership !== undefined ? Math.round(readership / 3) : undefined;
-
     let published = kPublished ? String(record[kPublished] ?? "").trim() : "";
     if (!published) {
       const derived = extractPublishedFromPrnUrl(url);
       if (derived) published = derived;
       else if (url) invalidDateUrls.add(url);
     }
-
     const outlet = kOutlet ? String(record[kOutlet] ?? "").trim() : "";
     let base = kBase ? String(record[kBase] ?? "").trim() : "";
     base = base.replace(/\s+/g, " ").trim();
-
     const title = kTitle ? String(record[kTitle] ?? "").trim() : "";
-
     const draft: ReportRow = {
       published: published || TEXT_PLACEHOLDER,
       outlet: outlet || TEXT_PLACEHOLDER,
@@ -214,7 +157,6 @@ export async function extractPrnFile(file: File): Promise<PrnExtractResult> {
     };
     rows.push(draft);
   });
-
   return { rows, issues, invalidDateUrls, headlineB1 };
 }
 
@@ -228,7 +170,6 @@ export function derivePrnStyle(
   const placeholders = new Map<number, (keyof ReportRow)[]>();
   const isPlaceholder = (v: unknown) =>
     typeof v === "string" && /^(not available|n\/a)$/i.test(v.trim());
-
   rows.forEach((r, i) => {
     const missing: (keyof ReportRow)[] = [];
     (

@@ -1,6 +1,6 @@
-import { buildReportClient } from "../../lib/report/buildReport";
+import { buildReportClient } from "../../lib/report/excel/buildReport";
 import type { SelectedFile } from "../../lib/files/types";
-import { extractCisionOneFile } from "../../lib/report/cisionOneExtractor";
+import { extractCisionOneFile } from "../../lib/report/sources/cisionOne.extractor";
 
 export const DownloadReportButton = ({
   isDisabled = false,

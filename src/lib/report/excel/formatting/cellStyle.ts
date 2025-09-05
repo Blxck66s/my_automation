@@ -1,8 +1,4 @@
 import type { Cell } from "exceljs";
-
-/**
- * Copy style attributes (no value) from src to dst.
- */
 export function copyCellStyle(src: Cell, dst: Cell): void {
   if (src.font) dst.font = { ...src.font };
   if (src.alignment) dst.alignment = { ...src.alignment };

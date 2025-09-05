@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import type { SelectedFile } from "../../lib/files/types";
-import { extractCisionOneFile } from "../../lib/report/cisionOneExtractor";
+import { extractCisionOneFile } from "../../lib/report/sources/cisionOne.extractor";
 import type { ReportRow } from "../../lib/report/types";
-import { buildReportClient } from "../../lib/report/buildReport";
-import { extractPrnFile } from "../../lib/report/prNewswire/extractor";
-import { mergeCisionAndPrn } from "../../lib/report/mergeReports";
-import type { BuildStyleWarnings } from "../../lib/report/styleWarnings";
+import { buildReportClient } from "../../lib/report/excel/buildReport";
+import { extractPrnFile } from "../../lib/report/sources/prNewswire.extractor";
+import { mergeCisionAndPrn } from "../../lib/report/merge/mergeReports";
+import type { BuildStyleWarnings } from "../../lib/report/model/styleWarnings";
 
 interface ReportGenerationFormProps {
   reportFile?: SelectedFile;
@@ -109,7 +109,7 @@ export function ReportGenerationForm({
       const base = reportFile.name.replace(/\.xlsx$/i, "");
       setOutputFileName(base || "report");
     }
-  }, [reportFile]);
+  }, [reportFile, outputNameChangedRef]);
 
   const canGenerate =
     rows.length > 0 && !!outputFileName.trim() && !!targetSheetName.trim();

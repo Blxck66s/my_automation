@@ -35,4 +35,5 @@ body {
   display: flex;
   min-width: 320px;
   min-height: 100vh;
+  margin-bottom: 4rem;
 }

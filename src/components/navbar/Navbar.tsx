@@ -83,7 +83,7 @@ function Navbar() {
   );
 
   return (
-    <div className="drawer w-fit p-4 pb-24">
+    <div className="drawer w-fit p-4 pb-4">
       <input
         id="my-drawer-3"
         type="checkbox"

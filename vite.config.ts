@@ -14,4 +14,10 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  resolve: {
+    alias: {
+      "@": "/src",
+      "@assets": "/src/assets",
+    },
+  },
 });

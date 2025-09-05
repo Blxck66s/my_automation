@@ -1,10 +1,5 @@
 import type { Worksheet } from "exceljs";
 import { copyCellStyle } from "./cellStyle";
-
-/**
- * Clone (shallow copy) style + height from one row to another (same worksheet).
- * Does not copy values.
- */
 export function cloneRowStyle(ws: Worksheet, fromIdx: number, toIdx: number) {
   if (fromIdx === toIdx) return;
   const src = ws.getRow(fromIdx);
