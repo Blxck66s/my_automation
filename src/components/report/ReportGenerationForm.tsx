@@ -1,11 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import type { SelectedFile } from "../../lib/files/types";
 import { extractCisionOneFile } from "../../lib/report/sources/cisionOne.extractor";
-import type { ReportRow } from "../../lib/report/types";
+import type { BuildStyleWarnings, ReportRow } from "../../lib/report/types";
 import { buildReportClient } from "../../lib/report/excel/buildReport";
 import { extractPrnFile } from "../../lib/report/sources/prNewswire.extractor";
 import { mergeCisionAndPrn } from "../../lib/report/merge/mergeReports";
-import type { BuildStyleWarnings } from "../../lib/report/model/styleWarnings";
 
 interface ReportGenerationFormProps {
   reportFile?: SelectedFile;

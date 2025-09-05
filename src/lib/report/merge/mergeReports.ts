@@ -56,18 +56,10 @@ function normalizeUrlForMatch(raw?: string): string | undefined {
   }
 }
 
-function parsePublishedDate(v: unknown): number {
-  if (typeof v !== "string") return Number.NEGATIVE_INFINITY;
-  let s = v.trim();
-  if (!s || /^(not available|n\/a)$/i.test(s)) return Number.NEGATIVE_INFINITY;
-  s = s.replace(/\./g, "-").replace(/\//g, "-").replace(/\s+/g, " ");
-  const dmy = /^(\d{1,2})-(\d{1,2})-(\d{4})$/;
-  if (dmy.test(s) && !/^\d{4}-/.test(s)) {
-    const [, d, m, y] = s.match(dmy)!;
-    return Date.parse(`${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`);
-  }
-  const ts = Date.parse(s);
-  return Number.isFinite(ts) ? ts : Number.NEGATIVE_INFINITY;
+function publishedTs(v: Date | string): number {
+  if (!(v instanceof Date)) return Number.NEGATIVE_INFINITY;
+  const t = v.getTime();
+  return Number.isFinite(t) ? t : Number.NEGATIVE_INFINITY;
 }
 
 export function mergeCisionAndPrn(
@@ -102,19 +94,29 @@ export function mergeCisionAndPrn(
       );
       baseRow.adEq = baseRow.adEq ? asNumber(baseRow.adEq) : asNumber(r.adEq);
       (["published", "outlet", "title", "base"] as const).forEach((f) => {
-        if (
-          isPlaceholder(baseRow[f]) &&
-          typeof r[f] === "string" &&
-          !isPlaceholder(r[f])
-        )
-          baseRow[f] = r[f];
+        if (f === "published") {
+          const basePub = baseRow.published;
+          const newPub = r.published;
+          const baseValid =
+            basePub instanceof Date && !isNaN(basePub.getTime());
+          const newValid = newPub instanceof Date && !isNaN(newPub.getTime());
+          if (!baseValid && newValid) baseRow.published = newPub;
+        } else {
+          if (
+            isPlaceholder(baseRow[f]) &&
+            typeof r[f] === "string" &&
+            !isPlaceholder(r[f])
+          ) {
+            (baseRow as unknown as Record<string, unknown>)[f] = r[f];
+          }
+        }
       });
       if (!baseRow.url && r.url) baseRow.url = r.url;
     }
   });
   rows.sort((a, b) => {
-    const db = parsePublishedDate(b.published);
-    const da = parsePublishedDate(a.published);
+    const db = publishedTs(b.published);
+    const da = publishedTs(a.published);
     if (da < db) return -1;
     if (da > db) return 1;
     const ob = (b.outlet || "").toLowerCase();

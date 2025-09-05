@@ -1,6 +1,56 @@
 import { HEADER_SYNONYMS, type ExtractIssue, type ReportRow } from "../types";
 import { norm, parseNumber } from "../utils/extractorTools";
 
+// Parse date in several common formats and normalize to a *local* date-only (midnight local time).
+// Previously we normalized to UTC to avoid cross‑TZ shifts when sharing, but requirement changed
+// to reflect the client's local timezone exactly.
+function parseFlexibleDate(raw: string): Date | undefined {
+  const s = raw.trim();
+  if (!s) return undefined;
+  const toLocalDateOnly = (y: number, m: number, d: number) =>
+    new Date(y, m, d); // local midnight
+  // Native parse first (lets engine interpret timezone / format) then collapse to local date-only
+  const native = Date.parse(s);
+  if (!Number.isNaN(native)) {
+    const dt = new Date(native);
+    return toLocalDateOnly(dt.getFullYear(), dt.getMonth(), dt.getDate());
+  }
+  // d/m/y or d-m-y
+  let m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
+  if (m) {
+    const [, d, mo, yRaw] = m;
+    let y = yRaw;
+    if (y.length === 2) y = (y < "50" ? "20" : "19") + y; // naive 2-digit pivot
+    return toLocalDateOnly(Number(y), Number(mo) - 1, Number(d));
+  }
+  // d-MMM-y (e.g. 5-Jan-2025)
+  m = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/);
+  if (m) {
+    const months = [
+      "jan",
+      "feb",
+      "mar",
+      "apr",
+      "may",
+      "jun",
+      "jul",
+      "aug",
+      "sep",
+      "oct",
+      "nov",
+      "dec",
+    ];
+    const [, d, mon, yRaw] = m;
+    let y = yRaw;
+    const idx = months.indexOf(mon.toLowerCase());
+    if (idx >= 0) {
+      if (y.length === 2) y = (y < "50" ? "20" : "19") + y;
+      return toLocalDateOnly(Number(y), idx, Number(d));
+    }
+  }
+  return undefined;
+}
+
 export interface CisionOneExtractResult {
   rows: ReportRow[];
   issues: ExtractIssue[];
@@ -116,9 +166,11 @@ export function extractCisionOneCsv(csvText: string): CisionOneExtractResult {
           else draft.adEq = num;
           break;
         }
-        case "published":
-          draft.published = trimmed;
+        case "published": {
+          const parsed = parseFlexibleDate(trimmed);
+          draft.published = parsed ? parsed : "Not Available";
           break;
+        }
         case "outlet":
           draft.outlet = trimmed;
           break;
@@ -145,6 +197,14 @@ export function extractCisionOneCsv(csvText: string): CisionOneExtractResult {
     const missing = required.filter(
       (k) => draft[k] === undefined || draft[k] === ""
     );
+    if (draft.published === "Not Available") {
+      issues.push({
+        row: i + 1,
+        field: "published",
+        message: "Missing or invalid published date",
+        rawValue: "",
+      });
+    }
     if (missing.length) {
       issues.push({
         row: i + 1,
@@ -154,7 +214,6 @@ export function extractCisionOneCsv(csvText: string): CisionOneExtractResult {
     }
     rows.push(draft as ReportRow);
   }
-  rows.reverse();
   return { rows, issues, unmappedHeaders: unmapped, headerMap: reverse };
 }
 

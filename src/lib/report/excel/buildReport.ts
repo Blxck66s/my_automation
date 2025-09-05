@@ -71,13 +71,31 @@ export async function buildReportClient(
   if (baseHeadline && numberPrefix)
     ws.getCell("A1").value = `${numberPrefix}. ${baseHeadline}`;
   const startingSeq = 1;
+  // Convert JS Date (local date-only) to Excel serial date (1900 date system) with no time component.
+  const toExcelSerial = (d: Date): number => {
+    // Excel's day 1 is 1900-01-01, but due to the 1900 leap year bug, serial 60 is 1900-02-29.
+    // Using UTC to avoid local DST influence.
+    const msPerDay = 86400000;
+    const excelEpoch = Date.UTC(1899, 11, 30); // 1899-12-30
+    const utcMidnight = Date.UTC(d.getFullYear(), d.getMonth(), d.getDate());
+    return Math.round((utcMidnight - excelEpoch) / msPerDay);
+  };
+
   rows.forEach((r, i) => {
     const rowIndex = startRow + i;
     if (i > 0) cloneRowStyle(ws, startRow, rowIndex);
     const row = ws.getRow(rowIndex);
     const cleanedUrl = extractDisplayUrl(r.url);
     row.getCell(1).value = startingSeq + i;
-    row.getCell(2).value = r.published;
+    if (r.published instanceof Date && !isNaN(r.published.getTime())) {
+      // Write as pure date serial to eliminate timezone/time portion display.
+      row.getCell(2).value = toExcelSerial(r.published);
+      row.getCell(2).numFmt = "dd-MMM-yy"; // e.g. 05-Jan-25
+    } else if (typeof r.published === "string") {
+      row.getCell(2).value = r.published; // e.g. "Not Available"
+    } else {
+      row.getCell(2).value = "Not Available";
+    }
     row.getCell(3).value = r.outlet;
     if (cleanedUrl) {
       row.getCell(4).value = { text: r.title, hyperlink: cleanedUrl };
@@ -123,7 +141,14 @@ export async function buildReportClient(
     };
     totalRow.commit();
   }
-  if (autoFit) autoFitColumns(ws, [2, 3, 4, 7]);
+  if (autoFit)
+    autoFitColumns(ws, [2, 3, 4, 5, 6, 7], {
+      perColumn: {
+        2: { max: 14 }, // Published
+        5: { max: 16 }, // Readership
+        6: { max: 16 }, // AdEq
+      },
+    });
   const out = await wb.xlsx.writeBuffer();
   saveAs(
     new Blob([out], {

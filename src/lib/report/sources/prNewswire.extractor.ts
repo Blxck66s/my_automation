@@ -5,6 +5,50 @@ import {
   norm,
 } from "../utils/extractorTools";
 
+function toDate(raw: string): Date | undefined {
+  const s = raw.trim();
+  if (!s) return undefined;
+  const toLocalDateOnly = (y: number, m: number, d: number) =>
+    new Date(y, m, d); // midnight local
+  const native = Date.parse(s);
+  if (!Number.isNaN(native)) {
+    const dt = new Date(native);
+    return toLocalDateOnly(dt.getFullYear(), dt.getMonth(), dt.getDate());
+  }
+  let m = s.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
+  if (m) {
+    const [, d, mo, yRaw] = m;
+    let y = yRaw;
+    if (y.length === 2) y = (y < "50" ? "20" : "19") + y; // simple 2-digit year pivot
+    return toLocalDateOnly(Number(y), Number(mo) - 1, Number(d));
+  }
+  m = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{2,4})$/);
+  if (m) {
+    const months = [
+      "jan",
+      "feb",
+      "mar",
+      "apr",
+      "may",
+      "jun",
+      "jul",
+      "aug",
+      "sep",
+      "oct",
+      "nov",
+      "dec",
+    ];
+    const [, d, mon, yRaw] = m;
+    let y = yRaw;
+    const idx = months.indexOf(mon.toLowerCase());
+    if (idx >= 0) {
+      if (y.length === 2) y = (y < "50" ? "20" : "19") + y;
+      return toLocalDateOnly(Number(y), idx, Number(d));
+    }
+  }
+  return undefined;
+}
+
 export interface PrnExtractResult {
   rows: ReportRow[];
   issues: ExtractIssue[];
@@ -133,18 +177,21 @@ export async function extractPrnFile(file: File): Promise<PrnExtractResult> {
     }
     const adEq =
       readership !== undefined ? Math.round(readership / 3) : undefined;
-    let published = kPublished ? String(record[kPublished] ?? "").trim() : "";
-    if (!published) {
+    let publishedStr = kPublished
+      ? String(record[kPublished] ?? "").trim()
+      : "";
+    if (!publishedStr) {
       const derived = extractPublishedFromPrnUrl(url);
-      if (derived) published = derived;
+      if (derived) publishedStr = derived;
       else if (url) invalidDateUrls.add(url);
     }
+    const published = toDate(publishedStr) ?? "Not Available";
     const outlet = kOutlet ? String(record[kOutlet] ?? "").trim() : "";
     let base = kBase ? String(record[kBase] ?? "").trim() : "";
     base = base.replace(/\s+/g, " ").trim();
     const title = kTitle ? String(record[kTitle] ?? "").trim() : "";
     const draft: ReportRow = {
-      published: published || TEXT_PLACEHOLDER,
+      published,
       outlet: outlet || TEXT_PLACEHOLDER,
       title: title || TEXT_PLACEHOLDER,
       readership:
@@ -182,7 +229,13 @@ export function derivePrnStyle(
         "base",
       ] as (keyof ReportRow)[]
     ).forEach((f) => {
-      if (isPlaceholder(r[f])) missing.push(f);
+      if (f === "published") {
+        if (
+          (r.published instanceof Date && isNaN(r.published.getTime())) ||
+          r.published === "Not Available"
+        )
+          missing.push(f);
+      } else if (isPlaceholder(r[f])) missing.push(f);
     });
     if (missing.length) placeholders.set(i, missing);
   });

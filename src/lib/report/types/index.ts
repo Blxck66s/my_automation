@@ -1,12 +1,22 @@
-/** a single row of a media coverage report */
+/** A single row of a media coverage report */
 export interface ReportRow {
-  published: string; // e.g. "26-Aug-25" (string so caller controls locale)
-  outlet: string; // Media outlet name
-  title: string; // Coverage title (display text for hyperlink)
-  readership: number; // Total readership
-  adEq: number; // Ad equivalent value
-  base: string; // Media base / region
-  url?: string; // Optional hyperlink target
+  /**
+   * Date article was published. If successfully parsed it's a Date (date-only semantics, no time).
+   * If unavailable or unparsable it is the placeholder string "Not Available".
+   */
+  published: Date | string;
+  /** Media outlet name */
+  outlet: string;
+  /** Coverage title (display text for hyperlink) */
+  title: string;
+  /** Total readership */
+  readership: number;
+  /** Ad equivalent value */
+  adEq: number;
+  /** Media base / region */
+  base: string;
+  /** Optional hyperlink target */
+  url?: string;
 }
 
 /** style warnings found when building a report */
