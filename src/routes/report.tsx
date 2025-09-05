@@ -20,13 +20,11 @@ function RouteComponent() {
   return (
     <div className="container mx-auto max-w-5xl p-4 space-y-8">
       <header className="space-y-1">
-        <h1 className="text-2xl font-bold">Automation Workspace</h1>
-        <p className="text-sm opacity-80">
+        <h1 className="text-2xl font-bold">Report Automation (Monthly)</h1>
+        <h3 className="opacity-80 my-4">
           Step 1: Upload base report, Cision One CSV data, optional PRNewswire
           XLSX data.
-          <br />
-          Step 2 (mapping, formatting, dedupe) coming soon.
-        </p>
+        </h3>
       </header>
       <section className="flex flex-col gap-6 md:flex-row md:flex-wrap">
         <FileDropZone
@@ -37,22 +35,12 @@ function RouteComponent() {
             ".xlsx",
             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
           ]}
-          required
           value={reportFile}
           onSelect={setReportFile}
         />
         <FileDropZone
-          id="primary-csv"
-          label="2. Cision One Data File (.csv)"
-          description="Main CSV dataset to normalize & merge."
-          accept={[".csv", "text/csv"]}
-          required
-          value={cisionOneDataFile}
-          onSelect={setCisionOneDataFile}
-        />
-        <FileDropZone
           id="supplemental-xlsx"
-          label="3. PRNewswire Data File (.xls/.xlsx)"
+          label="2. PRNewswire Data File (.xls/.xlsx)"
           description="Optional (may include duplicates)."
           accept={[
             ".xls",
@@ -63,8 +51,20 @@ function RouteComponent() {
           value={prNewswireDataFile}
           onSelect={setPrNewswireDataFile}
         />
+        <FileDropZone
+          id="primary-csv"
+          label="3. Cision One Data File (.csv)"
+          description="Main CSV dataset to normalize & merge."
+          accept={[".csv", "text/csv"]}
+          required
+          value={cisionOneDataFile}
+          onSelect={setCisionOneDataFile}
+        />
       </section>
       <section className="flex flex-col items-center border-t pt-6">
+        <h3 className="opacity-80 my-4">
+          Step 2 (once files are uploaded): Generate Report
+        </h3>
         <ReportGenerationForm
           reportFile={reportFile}
           cisionOneDataFile={cisionOneDataFile}

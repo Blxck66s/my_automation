@@ -66,14 +66,18 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
   const clear = useCallback(() => onSelect(undefined), [onSelect]);
 
   return (
-    <div className="card bg-base-200  shadow-md flex-1/3">
+    <div className="card bg-base-200 shadow-md flex-1/3">
       <div className="card-body gap-4">
         <h2 className="card-title flex items-center gap-2">
           {label}
           {required ? (
-            <span className="badge badge-primary badge-sm">Required</span>
+            <span className="badge badge-primary badge-xs badge-soft absolute right-2 top-2">
+              Required
+            </span>
           ) : (
-            <span className="badge badge-ghost badge-sm">Optional</span>
+            <span className="badge badge-xs badge-soft absolute right-2 top-2">
+              Optional
+            </span>
           )}
         </h2>
         <p className="text-sm opacity-80">{description}</p>
@@ -106,9 +110,9 @@ export const FileDropZone: React.FC<FileDropZoneProps> = ({
               browse
             </label>
           </span>
-          {/* <span id={`${id}-desc`} className="text-xs opacity-70 min-h-12">
+          <span id={`${id}-desc`} className="text-xs opacity-70 min-h-12">
             Accepts: {accept.join(", ")}
-          </span> */}
+          </span>
           {value && (
             <div className="mt-2 flex flex-col items-center gap-1">
               <div className="badge badge-info badge-outline">{value.name}</div>
