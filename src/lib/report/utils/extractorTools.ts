@@ -37,3 +37,12 @@ export function extractDisplayUrl(raw?: string): string | undefined {
   const m = trimmed.match(/^=HYPERLINK\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)$/i);
   return m ? m[2] : raw;
 }
+
+/**
+ * Derive sheet name from first numeric prefix in CSV file name (NN_ / NN- / NN ).
+ */
+export function deriveSuggestedSheetName(fileName: string): string {
+  const m = fileName.match(/(^|\D)(\d{1,4})[_\-\s]/);
+  if (m && m[2]) return m[2];
+  return "Report";
+}

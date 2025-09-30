@@ -69,6 +69,11 @@ function RouteComponent() {
           reportFile={reportFile}
           cisionOneDataFile={cisionOneDataFile}
           prNewswireDataFile={prNewswireDataFile}
+          onReportFileReplace={setReportFile}
+          onResetSourceFiles={() => {
+            setCisionOneDataFile(undefined);
+            setPrNewswireDataFile(undefined);
+          }}
         />
       </section>
     </div>

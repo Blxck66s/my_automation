@@ -1,30 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
+import { saveAs } from "file-saver";
 import type { SelectedFile } from "../../lib/files/types";
 import { extractCisionOneFile } from "../../lib/report/sources/cisionOne.extractor";
 import type { BuildStyleWarnings, ReportRow } from "../../lib/report/types";
 import { buildReportClient } from "../../lib/report/excel/buildReport";
 import { extractPrnFile } from "../../lib/report/sources/prNewswire.extractor";
 import { mergeCisionAndPrn } from "../../lib/report/merge/mergeReports";
+import { deriveSuggestedSheetName } from "../../lib/report/utils/extractorTools";
 
 interface ReportGenerationFormProps {
   reportFile?: SelectedFile;
   cisionOneDataFile?: SelectedFile;
-  prNewswireDataFile?: SelectedFile; // NEW
-}
-
-/**
- * Derive sheet name from first numeric prefix in CSV file name (NN_ / NN- / NN ).
- */
-function deriveSuggestedSheetName(fileName: string): string {
-  const m = fileName.match(/(^|\D)(\d{1,4})[_\-\s]/);
-  if (m && m[2]) return m[2];
-  return "Report";
+  prNewswireDataFile?: SelectedFile;
+  onReportFileReplace?: (file: SelectedFile) => void;
+  onResetSourceFiles?: () => void;
 }
 
 export function ReportGenerationForm({
   reportFile,
   cisionOneDataFile,
   prNewswireDataFile,
+  onReportFileReplace,
+  onResetSourceFiles,
 }: ReportGenerationFormProps) {
   const [rows, setRows] = useState<ReportRow[]>([]);
   const [issues, setIssues] = useState<{ row: number; message: string }[]>([]);
@@ -32,7 +29,8 @@ export function ReportGenerationForm({
   const [styleWarnings, setStyleWarnings] = useState<
     BuildStyleWarnings | undefined
   >(undefined);
-  const [prnHeadline, setPrnHeadline] = useState<string | undefined>(); // NEW
+  const [prnHeadline, setPrnHeadline] = useState<string | undefined>();
+  const [generatedReport, setGeneratedReport] = useState<File | null>(null);
 
   // Form state
   const [ignoreExistingWorkbook, setIgnoreExistingWorkbook] = useState(false);
@@ -47,6 +45,7 @@ export function ReportGenerationForm({
     let cancelled = false;
     async function run() {
       setStyleWarnings(undefined);
+      if (cisionOneDataFile) setGeneratedReport(null);
       if (!cisionOneDataFile) {
         setRows([]);
         setIssues([]);
@@ -68,8 +67,8 @@ export function ReportGenerationForm({
           try {
             const prnRes = await extractPrnFile(prNewswireDataFile.file);
             if (cancelled) return;
-            const { rows: prnRows, invalidDateUrls, headlineB1 } = prnRes; // NEW
-            setPrnHeadline(headlineB1); // NEW
+            const { rows: prnRows, invalidDateUrls, headlineB1 } = prnRes;
+            setPrnHeadline(headlineB1);
             const { rows: finalRows, styleWarnings: sw } = mergeCisionAndPrn(
               cisionRes.rows,
               prnRows,
@@ -112,22 +111,57 @@ export function ReportGenerationForm({
 
   const canGenerate =
     rows.length > 0 && !!outputFileName.trim() && !!targetSheetName.trim();
+  const canDownload = !!generatedReport;
 
   const handleGenerate = async () => {
     if (!canGenerate) return;
     // derive numeric prefix from sheet suggestion (digits only)
     const numPrefixMatch = cisionOneDataFile?.name.match(/(\d{1,4})/);
     const numberPrefix = numPrefixMatch ? numPrefixMatch[1] : undefined;
+    // Ensure output filename ends with .xlsx
+    const outputFileNameTrimmed = outputFileName.trim().endsWith(".xlsx")
+      ? outputFileName.trim()
+      : `${outputFileName.trim()}.xlsx`;
 
-    await buildReportClient(rows, {
-      baseWorkbookFile:
-        ignoreExistingWorkbook || !reportFile ? undefined : reportFile.file,
-      targetSheetName: targetSheetName.trim(),
-      outputFilename: outputFileName.trim() + ".xlsx",
-      styleWarnings,
-      numberPrefix,
-      headlineFromPrn: prnHeadline, // NEW
-    });
+    try {
+      const generatedFile = await buildReportClient(rows, {
+        baseWorkbookFile:
+          ignoreExistingWorkbook || !reportFile ? undefined : reportFile.file,
+        targetSheetName: targetSheetName.trim(),
+        outputFilename: outputFileNameTrimmed,
+        styleWarnings,
+        numberPrefix,
+        headlineFromPrn: prnHeadline,
+        autoDownload: false,
+      });
+      if (!generatedFile) return;
+
+      setGeneratedReport(generatedFile);
+      const replacement: SelectedFile = {
+        file: generatedFile,
+        name: generatedFile.name,
+        size: generatedFile.size,
+        lastModified: generatedFile.lastModified,
+        type: generatedFile.type,
+      } as SelectedFile;
+      onReportFileReplace?.(replacement);
+      onResetSourceFiles?.();
+
+      setRows([]);
+      setIssues([]);
+      setStyleWarnings(undefined);
+      setPrnHeadline(undefined);
+      setIgnoreExistingWorkbook(false);
+      setTargetSheetName("");
+      setOutputFileName("report");
+      outputNameChangedRef.current = false;
+    } catch (error) {
+      console.error("Report generation failed:", error);
+    }
+  };
+  const handleDownload = () => {
+    if (!generatedReport) return;
+    saveAs(generatedReport, generatedReport.name);
   };
   return (
     <div className="card shadow-md bg-base-200 w-fit">
@@ -240,13 +274,26 @@ export function ReportGenerationForm({
             <button
               type="submit"
               className="btn btn-primary"
-              disabled={!canGenerate}
+              disabled={!canGenerate || loading}
             >
               Generate Excel
             </button>
-            {!canGenerate && (
+            <button
+              type="button"
+              className="btn btn-secondary"
+              disabled={!canDownload}
+              onClick={handleDownload}
+            >
+              Download Excel
+            </button>
+            {!canGenerate && !generatedReport && (
               <span className="text-xs text-warning">
                 Provide CSV data and sheet/output names.
+              </span>
+            )}
+            {generatedReport && (
+              <span className="text-xs text-success">
+                Report ready. Click Download.
               </span>
             )}
           </div>

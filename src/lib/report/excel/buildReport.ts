@@ -21,13 +21,14 @@ export interface BuildReportOptions {
   styleWarnings?: BuildStyleWarnings;
   numberPrefix?: string;
   headlineFromPrn?: string;
+  autoDownload?: boolean;
 }
 
 export async function buildReportClient(
   rows: ReportRow[],
   opts: BuildReportOptions = {}
-): Promise<void> {
-  if (!rows.length) return;
+): Promise<File | null> {
+  if (!rows.length) return null;
   const {
     startRow = 3,
     writeTotals = true,
@@ -38,6 +39,7 @@ export async function buildReportClient(
     styleWarnings,
     numberPrefix,
     headlineFromPrn,
+    autoDownload = true,
   } = opts;
   const wb = new ExcelJS.Workbook();
   let ws: ExcelJS.Worksheet;
@@ -141,19 +143,22 @@ export async function buildReportClient(
     };
     totalRow.commit();
   }
-  if (autoFit)
+  if (autoFit) {
     autoFitColumns(ws, [2, 3, 4, 5, 6, 7], {
       perColumn: {
         2: { max: 14 }, // Published
-        5: { max: 16 }, // Readership
+        // 5: { max: 24 }, // Readership
         6: { max: 16 }, // AdEq
       },
     });
+  }
   const out = await wb.xlsx.writeBuffer();
-  saveAs(
-    new Blob([out], {
-      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-    }),
-    outputFilename.endsWith(".xlsx") ? outputFilename : `${outputFilename}.xlsx`
-  );
+  const blob = new Blob([out], {
+    type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  });
+  const generatedFile = new File([blob], outputFilename, {
+    type: blob.type,
+  });
+  if (autoDownload) saveAs(generatedFile, outputFilename);
+  return generatedFile;
 }
