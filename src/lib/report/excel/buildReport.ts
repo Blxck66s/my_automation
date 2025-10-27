@@ -29,6 +29,27 @@ export async function buildReportClient(
   opts: BuildReportOptions = {}
 ): Promise<File | null> {
   if (!rows.length) return null;
+  const indexedRows = rows.map((row, originalIdx) => ({
+    row,
+    originalIdx,
+  }));
+  const sortKey = (value: ReportRow["published"]) =>
+    value instanceof Date && !Number.isNaN(value.getTime())
+      ? value.getTime()
+      : Number.POSITIVE_INFINITY;
+  indexedRows.sort((a, b) => {
+    const diff = sortKey(a.row.published) - sortKey(b.row.published);
+    if (diff !== 0) return diff;
+    const outletA = (a.row.outlet || "").toLowerCase();
+    const outletB = (b.row.outlet || "").toLowerCase();
+    return outletA.localeCompare(outletB);
+  });
+  const sortedRows = indexedRows.map((entry) => entry.row);
+  const indexMap = new Map<number, number>();
+  indexedRows.forEach((entry, newIndex) => {
+    indexMap.set(entry.originalIdx, newIndex);
+  });
+  const rowCount = sortedRows.length;
   const {
     startRow = 3,
     writeTotals = true,
@@ -54,8 +75,8 @@ export async function buildReportClient(
     if (ws) ws.name = ensureUniqueSheetName(wb, targetSheetName);
   }
   if (!ws) throw new Error("Failed to acquire worksheet");
-  if (rows.length > 1)
-    ws.spliceRows(startRow + 1, 0, ...Array(rows.length - 1).fill([]));
+  if (rowCount > 1)
+    ws.spliceRows(startRow + 1, 0, ...Array(rowCount - 1).fill([]));
   const toPlainText = (v: CellValue): string => {
     if (v == null) return "";
     if (typeof v === "object") {
@@ -83,7 +104,7 @@ export async function buildReportClient(
     return Math.round((utcMidnight - excelEpoch) / msPerDay);
   };
 
-  rows.forEach((r, i) => {
+  sortedRows.forEach((r, i) => {
     const rowIndex = startRow + i;
     if (i > 0) cloneRowStyle(ws, startRow, rowIndex);
     const row = ws.getRow(rowIndex);
@@ -129,11 +150,13 @@ export async function buildReportClient(
       }
       excelRow.commit();
     };
-    styleWarnings.redCells?.forEach(({ row, col }) => applyRedFont(row, col));
-    styleWarnings.redRows?.forEach((r) => applyRedFont(r));
+    styleWarnings.redCells?.forEach(({ row, col }) =>
+      applyRedFont(indexMap.get(row) ?? row, col)
+    );
+    styleWarnings.redRows?.forEach((r) => applyRedFont(indexMap.get(r) ?? r));
   }
   if (writeTotals) {
-    const lastDataRow = startRow + rows.length - 1;
+    const lastDataRow = startRow + rowCount - 1;
     const totalRow = ws.getRow(lastDataRow + 1);
     totalRow.getCell(5).value = {
       formula: `SUM(E${startRow}:E${lastDataRow})`,
@@ -147,7 +170,7 @@ export async function buildReportClient(
     autoFitColumns(ws, [2, 3, 4, 5, 6, 7], {
       perColumn: {
         2: { max: 14 }, // Published
-        // 5: { max: 24 }, // Readership
+        5: { max: 24 }, // Readership
         6: { max: 16 }, // AdEq
       },
     });
