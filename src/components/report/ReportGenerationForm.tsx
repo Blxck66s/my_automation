@@ -6,7 +6,10 @@ import type { BuildStyleWarnings, ReportRow } from "../../lib/report/types";
 import { buildReportClient } from "../../lib/report/excel/buildReport";
 import { extractPrnFile } from "../../lib/report/sources/prNewswire.extractor";
 import { mergeCisionAndPrn } from "../../lib/report/merge/mergeReports";
-import { deriveSuggestedSheetName } from "../../lib/report/utils/extractorTools";
+import {
+  deriveHeadlineFromCisionFilename,
+  deriveSuggestedSheetName,
+} from "../../lib/report/utils/extractorTools";
 
 interface ReportGenerationFormProps {
   reportFile?: SelectedFile;
@@ -30,6 +33,7 @@ export function ReportGenerationForm({
     BuildStyleWarnings | undefined
   >(undefined);
   const [prnHeadline, setPrnHeadline] = useState<string | undefined>();
+  const [cisionHeadline, setCisionHeadline] = useState<string | undefined>();
   const [generatedReport, setGeneratedReport] = useState<File | null>(null);
 
   // Form state
@@ -49,6 +53,7 @@ export function ReportGenerationForm({
       if (!cisionOneDataFile) {
         setRows([]);
         setIssues([]);
+        setCisionHeadline(undefined);
         return;
       }
       setLoading(true);
@@ -88,6 +93,9 @@ export function ReportGenerationForm({
 
         setRows(mergedRows);
         setStyleWarnings(mergedStyles);
+        setCisionHeadline(
+          deriveHeadlineFromCisionFilename(cisionOneDataFile.name)
+        );
         const suggestion = deriveSuggestedSheetName(cisionOneDataFile.name);
         setTargetSheetName((prev) => (prev ? prev : suggestion));
         setIssues(mergedIssues);
@@ -132,6 +140,7 @@ export function ReportGenerationForm({
         styleWarnings,
         numberPrefix,
         headlineFromPrn: prnHeadline,
+        headlineFromCisionFile: cisionHeadline,
         autoDownload: false,
       });
       if (!generatedFile) return;
@@ -151,6 +160,7 @@ export function ReportGenerationForm({
       setIssues([]);
       setStyleWarnings(undefined);
       setPrnHeadline(undefined);
+      setCisionHeadline(undefined);
       setIgnoreExistingWorkbook(false);
       setTargetSheetName("");
       setOutputFileName("report");

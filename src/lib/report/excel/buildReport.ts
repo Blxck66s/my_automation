@@ -21,6 +21,7 @@ export interface BuildReportOptions {
   styleWarnings?: BuildStyleWarnings;
   numberPrefix?: string;
   headlineFromPrn?: string;
+  headlineFromCisionFile?: string;
   autoDownload?: boolean;
 }
 
@@ -60,6 +61,7 @@ export async function buildReportClient(
     styleWarnings,
     numberPrefix,
     headlineFromPrn,
+    headlineFromCisionFile,
     autoDownload = true,
   } = opts;
   const wb = new ExcelJS.Workbook();
@@ -91,8 +93,11 @@ export async function buildReportClient(
     headlineFromPrn ?? toPlainText(ws.getCell("B1").value)
   ).trim();
   if (headlineFromPrn) ws.getCell("B1").value = baseHeadline;
+  const cisionHeadline = headlineFromCisionFile?.trim();
   if (baseHeadline && numberPrefix)
     ws.getCell("A1").value = `${numberPrefix}. ${baseHeadline}`;
+  if (cisionHeadline) ws.getCell("A1").value = cisionHeadline;
+
   const startingSeq = 1;
   // Convert JS Date (local date-only) to Excel serial date (1900 date system) with no time component.
   const toExcelSerial = (d: Date): number => {

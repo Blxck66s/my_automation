@@ -46,3 +46,17 @@ export function deriveSuggestedSheetName(fileName: string): string {
   if (m && m[2]) return m[2];
   return "Report";
 }
+
+/** Convert Cision CSV name like 01_headline to `1. headline` for cell A1. */
+export function deriveHeadlineFromCisionFilename(
+  fileName: string
+): string | undefined {
+  const withoutExt = fileName.replace(/\.[^/.]+$/, "");
+  const match = withoutExt.match(/^(\d{1,4})[_-](.+)$/);
+  if (!match) return undefined;
+  const numeric = Number(match[1]);
+  if (!Number.isFinite(numeric)) return undefined;
+  const text = match[2].replace(/[_-]+/g, " ").trim();
+  if (!text) return undefined;
+  return `${numeric}. ${text}`;
+}
