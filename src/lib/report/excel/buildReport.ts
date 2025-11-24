@@ -9,6 +9,7 @@ import {
   importTemplateSheet,
 } from "./template/workbookTemplate";
 import { extractDisplayUrl } from "../utils/extractorTools";
+import { appendPrsSummary } from "./PRsSummary";
 
 export interface BuildReportOptions {
   startRow?: number;
@@ -64,6 +65,8 @@ export async function buildReportClient(
     headlineFromCisionFile,
     autoDownload = true,
   } = opts;
+  const totalReadership = rows.reduce((sum, r) => sum + (r.readership || 0), 0);
+  const totalAdEq = rows.reduce((sum, r) => sum + (r.adEq || 0), 0);
   const wb = new ExcelJS.Workbook();
   let ws: ExcelJS.Worksheet;
   if (baseWorkbookFile) {
@@ -180,6 +183,21 @@ export async function buildReportClient(
       },
     });
   }
+
+  appendPrsSummary({
+    workbook: wb,
+    reportSheet: ws,
+    startRow,
+    rowCount,
+    writeTotals,
+    totalReadership,
+    totalAdEq,
+    headlineText:
+      headlineFromCisionFile?.trim() ||
+      cisionHeadline ||
+      baseHeadline ||
+      undefined,
+  });
   const out = await wb.xlsx.writeBuffer();
   const blob = new Blob([out], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
