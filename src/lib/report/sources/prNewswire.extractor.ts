@@ -59,6 +59,38 @@ export interface PrnExtractResult {
 const TEXT_PLACEHOLDER = "Not Available";
 const NUM_PLACEHOLDER = "N/A";
 
+const REQUIRED_PRN_HEADER_SEQUENCE = [
+  "PR Newswire ID",
+  "Language",
+  "Outlet Name",
+  "Media Type",
+  "Link",
+  "Location",
+  "Source Type",
+  "Industry",
+  "Potential Audience",
+  "Format",
+  "Source",
+];
+
+function findHeaderRowBySequence(matrix: unknown[][]): number | undefined {
+  for (let i = 0; i < matrix.length; i++) {
+    const row = matrix[i];
+    if (!row) continue;
+    let matches = true;
+    for (let c = 0; c < REQUIRED_PRN_HEADER_SEQUENCE.length; c++) {
+      const expected = REQUIRED_PRN_HEADER_SEQUENCE[c];
+      const cell = String(row[c] ?? "").trim();
+      if (norm(cell) !== norm(expected)) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) return i;
+  }
+  return undefined;
+}
+
 function buildHeaderIndex(
   headers: string[]
 ): Record<number, keyof ReportRow | undefined> {
@@ -109,26 +141,32 @@ export async function extractPrnFile(file: File): Promise<PrnExtractResult> {
       issues: [{ row: 0, message: "Empty sheet" }],
       invalidDateUrls,
     };
-  let startIdValue: string | undefined;
-  const b4Cell = ws["B4"];
-  if (b4Cell && b4Cell.v != null) {
-    const v = String(b4Cell.v).trim();
-    if (v) startIdValue = v;
-  }
-  let startDataIndex = 0;
-  if (startIdValue) {
-    for (let i = 0; i < matrix.length; i++) {
-      const first = String(matrix[i][0] ?? "").trim();
-      if (first === startIdValue) {
-        startDataIndex = i;
-        break;
+  let headerRowIndex = findHeaderRowBySequence(matrix);
+  let startDataIndex = headerRowIndex !== undefined ? headerRowIndex + 1 : 0;
+  if (headerRowIndex === undefined) {
+    let startIdValue: string | undefined;
+    const b4Cell = ws["B4"];
+    if (b4Cell && b4Cell.v != null) {
+      const v = String(b4Cell.v).trim();
+      if (v) startIdValue = v;
+    }
+    if (startIdValue) {
+      for (let i = 0; i < matrix.length; i++) {
+        const first = String(matrix[i][0] ?? "").trim();
+        if (first === startIdValue) {
+          startDataIndex = i;
+          break;
+        }
       }
     }
+    headerRowIndex = startDataIndex > 0 ? startDataIndex - 1 : 0;
+    if (headerRowIndex === startDataIndex) {
+      startDataIndex = Math.min(startDataIndex + 1, matrix.length);
+    }
+  } else {
+    startDataIndex = Math.min(startDataIndex, matrix.length);
   }
-  const headerRowIndex = startDataIndex > 0 ? startDataIndex - 1 : 0;
-  if (headerRowIndex === startDataIndex) {
-    startDataIndex = Math.min(startDataIndex + 1, matrix.length);
-  }
+  if (headerRowIndex === undefined) headerRowIndex = 0;
   const rawHeaderCells = (matrix[headerRowIndex] as string[]) ?? [];
   const headers: string[] = rawHeaderCells.map((h, i) => {
     const trimmed = String(h ?? "").trim();
@@ -136,8 +174,15 @@ export async function extractPrnFile(file: File): Promise<PrnExtractResult> {
   });
   let endDataIndexExclusive = matrix.length;
   for (let i = startDataIndex; i < matrix.length; i++) {
-    const first = String(matrix[i][0] ?? "").trim();
-    if (first !== startIdValue) {
+    const row = matrix[i];
+    const isEmptyRow =
+      !row || row.every((cell) => cell == null || String(cell).trim() === "");
+    const isUnrelatedRow =
+      row &&
+      (row[0] ===
+        " * This website requires a subscription or a login to view content." ||
+        row[0] === "Earned Media");
+    if (isEmptyRow || isUnrelatedRow) {
       endDataIndexExclusive = i;
       break;
     }
@@ -162,7 +207,7 @@ export async function extractPrnFile(file: File): Promise<PrnExtractResult> {
   const kReadership = findKeyForField("readership");
   const kBase = findKeyForField("base");
   const kUrl = findKeyForField("url");
-  dataObjects.forEach((record) => {
+  for (const record of dataObjects) {
     const url = kUrl ? String(record[kUrl] ?? "").trim() : "";
     const readershipRaw = kReadership ? record[kReadership] : undefined;
     let readership = parseNumber(readershipRaw);
@@ -202,8 +247,14 @@ export async function extractPrnFile(file: File): Promise<PrnExtractResult> {
       base: base || TEXT_PLACEHOLDER,
       url: url || undefined,
     };
+    const hasMeaningfulText =
+      (draft.url && draft.url.trim().length > 0) ||
+      (draft.outlet && draft.outlet !== TEXT_PLACEHOLDER) ||
+      (draft.title && draft.title !== TEXT_PLACEHOLDER) ||
+      (draft.base && draft.base !== TEXT_PLACEHOLDER);
+    if (!hasMeaningfulText) continue;
     rows.push(draft);
-  });
+  }
   return { rows, issues, invalidDateUrls, headlineB1 };
 }
 

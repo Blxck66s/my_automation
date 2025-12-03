@@ -22,7 +22,7 @@ export function extractPublishedFromPrnUrl(url?: string): string | undefined {
   const mo = Number(raw.slice(4, 6));
   const d = Number(raw.slice(6, 8));
   if (!y || !mo || !d || mo < 1 || mo > 12) return undefined;
-  return `${String(d).padStart(2, "0")}/${String(mo).padStart(2, "0")}/${String(y).slice(-2)}`;
+  return `${String(mo).padStart(2, "0")}/${String(d).padStart(2, "0")}/${String(y).slice(-2)}`;
 }
 
 /**
@@ -38,11 +38,17 @@ export function extractDisplayUrl(raw?: string): string | undefined {
   return m ? m[2] : raw;
 }
 
+/** Remove trailing ` YYYYMMDD XXXXXXXX` noise Cision sometimes appends */
+function stripCisionTrailingStamp(value: string): string {
+  return value.replace(/\s+\d{8}\s+[A-Za-z0-9]{6,}$/u, "").trimEnd();
+}
+
 /**
  * Derive sheet name from first numeric prefix in CSV file name (NN_ / NN- / NN ).
  */
 export function deriveSuggestedSheetName(fileName: string): string {
-  const m = fileName.match(/(^|\D)(\d{1,4})[_\-\s]/);
+  const cleanedName = stripCisionTrailingStamp(fileName);
+  const m = cleanedName.match(/(^|\D)(\d{1,4})[_\-\s]/);
   if (m && m[2]) return m[2];
   return "Report";
 }
@@ -52,11 +58,13 @@ export function deriveHeadlineFromCisionFilename(
   fileName: string
 ): string | undefined {
   const withoutExt = fileName.replace(/\.[^/.]+$/, "");
-  const match = withoutExt.match(/^(\d{1,4})[_-](.+)$/);
+  const cleaned = stripCisionTrailingStamp(withoutExt);
+  const match = cleaned.match(/^(\d{1,4})[_-](.+)$/);
   if (!match) return undefined;
   const numeric = Number(match[1]);
   if (!Number.isFinite(numeric)) return undefined;
-  const text = match[2].replace(/[_-]+/g, " ").trim();
+  const textSource = cleaned.replace(/^(\d{1,4})[_-]/, "");
+  const text = textSource.replace(/[_-]+/g, " ").trim();
   if (!text) return undefined;
   return `${numeric}. ${text}`;
 }
