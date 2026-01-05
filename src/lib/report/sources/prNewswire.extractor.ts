@@ -57,7 +57,6 @@ export interface PrnExtractResult {
 }
 
 const TEXT_PLACEHOLDER = "Not Available";
-const NUM_PLACEHOLDER = "N/A";
 
 const REQUIRED_PRN_HEADER_SEQUENCE = [
   "PR Newswire ID",
@@ -205,23 +204,19 @@ export async function extractPrnFile(file: File): Promise<PrnExtractResult> {
   const kOutlet = findKeyForField("outlet");
   const kTitle = findKeyForField("title");
   const kReadership = findKeyForField("readership");
+  const kAdEq = findKeyForField("adEq");
   const kBase = findKeyForField("base");
   const kUrl = findKeyForField("url");
   for (const record of dataObjects) {
     const url = kUrl ? String(record[kUrl] ?? "").trim() : "";
     const readershipRaw = kReadership ? record[kReadership] : undefined;
-    let readership = parseNumber(readershipRaw);
-    if (readership === undefined) {
-      const numericCandidates: number[] = [];
-      Object.values(record).forEach((v) => {
-        const n = parseNumber(v);
-        if (n !== undefined && n > 0) numericCandidates.push(n);
-      });
-      if (numericCandidates.length)
-        readership = numericCandidates.sort((a, b) => b - a)[0];
-    }
+    const readership = parseNumber(readershipRaw) ?? 0;
+
+    const adEqRaw = kAdEq ? record[kAdEq] : undefined;
+    const parsedAdEq = parseNumber(adEqRaw);
     const adEq =
-      readership !== undefined ? Math.round(readership / 3) : undefined;
+      parsedAdEq !== undefined ? parsedAdEq : Math.round(readership / 3);
+
     let publishedStr = kPublished
       ? String(record[kPublished] ?? "").trim()
       : "";
@@ -239,11 +234,8 @@ export async function extractPrnFile(file: File): Promise<PrnExtractResult> {
       published,
       outlet: outlet || TEXT_PLACEHOLDER,
       title: title || TEXT_PLACEHOLDER,
-      readership:
-        readership !== undefined
-          ? readership
-          : (NUM_PLACEHOLDER as unknown as number),
-      adEq: adEq !== undefined ? adEq : (NUM_PLACEHOLDER as unknown as number),
+      readership,
+      adEq,
       base: base || TEXT_PLACEHOLDER,
       url: url || undefined,
     };

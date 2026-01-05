@@ -24,6 +24,7 @@ export interface BuildReportOptions {
   headlineFromPrn?: string;
   headlineFromCisionFile?: string;
   autoDownload?: boolean;
+  sortRows?: boolean;
 }
 
 export async function buildReportClient(
@@ -31,27 +32,6 @@ export async function buildReportClient(
   opts: BuildReportOptions = {}
 ): Promise<File | null> {
   if (!rows.length) return null;
-  const indexedRows = rows.map((row, originalIdx) => ({
-    row,
-    originalIdx,
-  }));
-  const sortKey = (value: ReportRow["published"]) =>
-    value instanceof Date && !Number.isNaN(value.getTime())
-      ? value.getTime()
-      : Number.POSITIVE_INFINITY;
-  indexedRows.sort((a, b) => {
-    const diff = sortKey(a.row.published) - sortKey(b.row.published);
-    if (diff !== 0) return diff;
-    const outletA = (a.row.outlet || "").toLowerCase();
-    const outletB = (b.row.outlet || "").toLowerCase();
-    return outletA.localeCompare(outletB);
-  });
-  const sortedRows = indexedRows.map((entry) => entry.row);
-  const indexMap = new Map<number, number>();
-  indexedRows.forEach((entry, newIndex) => {
-    indexMap.set(entry.originalIdx, newIndex);
-  });
-  const rowCount = sortedRows.length;
   const {
     startRow = 3,
     writeTotals = true,
@@ -64,7 +44,31 @@ export async function buildReportClient(
     headlineFromPrn,
     headlineFromCisionFile,
     autoDownload = true,
+    sortRows = true,
   } = opts;
+  const indexedRows = rows.map((row, originalIdx) => ({
+    row,
+    originalIdx,
+  }));
+  if (sortRows) {
+    const sortKey = (value: ReportRow["published"]) =>
+      value instanceof Date && !Number.isNaN(value.getTime())
+        ? value.getTime()
+        : Number.POSITIVE_INFINITY;
+    indexedRows.sort((a, b) => {
+      const diff = sortKey(a.row.published) - sortKey(b.row.published);
+      if (diff !== 0) return diff;
+      const outletA = (a.row.outlet || "").toLowerCase();
+      const outletB = (b.row.outlet || "").toLowerCase();
+      return outletA.localeCompare(outletB);
+    });
+  }
+  const sortedRows = indexedRows.map((entry) => entry.row);
+  const indexMap = new Map<number, number>();
+  indexedRows.forEach((entry, newIndex) => {
+    indexMap.set(entry.originalIdx, newIndex);
+  });
+  const rowCount = sortedRows.length;
   const totalReadership = rows.reduce((sum, r) => sum + (r.readership || 0), 0);
   const totalAdEq = rows.reduce((sum, r) => sum + (r.adEq || 0), 0);
   const wb = new ExcelJS.Workbook();
